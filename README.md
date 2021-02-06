@@ -1,2 +1,8 @@
 # canary-replay
-Replay HTTPCanary requests with option to run it through a proxy
+
+### Install
+
+### Usage
+
+### About 
+This program is used to 
