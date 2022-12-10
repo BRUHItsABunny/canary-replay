@@ -82,6 +82,7 @@ func main() {
 		fmt.Println(currentPrompt.Output)
 		if isOutdated {
 			fmt.Println(latestPrompt.Output)
+			fmt.Println(fmt.Sprintf("You can find more here:\n%s\n", latestPrompt.UpdateURL))
 		}
 		break
 	}
