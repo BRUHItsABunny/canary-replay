@@ -1,64 +1,65 @@
 package utils
 
 import (
+	"bytes"
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
 )
 
-func ParseHCY(location string, isHttps bool) (*http.Request, error) {
-	var (
-		reqContent *os.File
-		reqSummary *CanaryJSON
-		err        error
-		result     *http.Request
-	)
-
+func ParseHCY(location string, omitHeaders map[string]struct{}) (*http.Request, error) {
 	if !strings.HasSuffix(location, pathSeparator) {
 		location += pathSeparator
 	}
-
-	reqSummary, err = openAndParseSummary(location + "request.json")
-	if err == nil {
-		// TODO: this line might actually return nil?, may not need an if statement here
-		reqContent, err = os.Open(location + "request_body.bin")
-		if err == nil {
-			result, err = http.NewRequest(reqSummary.Method, reqSummary.URL, reqContent)
-		} else {
-			result, err = http.NewRequest(reqSummary.Method, reqSummary.URL, nil)
-		}
-
-		if err == nil {
-			// Add headers but don't automatically add capital letters, API may expect lowercase only so maintain the actual captured case
-			headers := result.Header
-			for headerName, headerValue := range reqSummary.Headers {
-				headers[headerName] = []string{headerValue}
-			}
-			result.Header = headers
-		}
+	reqSummary, err := openAndParseSummary(location + "request.json")
+	if err != nil {
+		return nil, fmt.Errorf("openAndParseSummary: %w", err)
+	}
+	var bodyBuf []byte
+	reqContent, err := os.Open(location + "request_body.bin")
+	if err != nil {
+		return nil, fmt.Errorf("os.Open: %w", err)
 	}
 
+	bodyBuf, err = io.ReadAll(reqContent)
+	if err != nil {
+		return nil, fmt.Errorf("io.ReadAll: %w", err)
+	}
+
+	result, err := http.NewRequest(reqSummary.Method, reqSummary.URL, bytes.NewBuffer(bodyBuf))
+	if err != nil {
+		return nil, fmt.Errorf("http.NewRequest: %w", err)
+	}
+
+	// Add headers but don't automatically add capital letters, API may expect lowercase only so maintain the actual captured case
+	for headerName, headerValue := range reqSummary.Headers {
+		_, omit := omitHeaders[strings.ToLower(headerName)]
+		if !omit {
+			result.Header[headerName] = []string{headerValue}
+		}
+	}
 	return result, err
 }
 
 func openAndParseSummary(filePath string) (*CanaryJSON, error) {
-	var (
-		file      *os.File
-		fileBytes []byte
-		err       error
-		result    = new(CanaryJSON)
-	)
-
-	file, err = os.Open(filePath)
-	if err == nil {
-		fileBytes, err = ioutil.ReadAll(file)
-		if err == nil {
-			err = json.Unmarshal(fileBytes, result)
-		}
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("os.Open: %w", err)
 	}
 
+	fileBytes, err := io.ReadAll(file)
+	if err != nil {
+		return nil, fmt.Errorf("io.ReadAll: %w", err)
+	}
+
+	result := new(CanaryJSON)
+	err = json.Unmarshal(fileBytes, result)
+	if err != nil {
+		return nil, fmt.Errorf("json.Unmarshal: %w", err)
+	}
 	return result, err
 }
 
